@@ -1,10 +1,13 @@
 "use client";
 
+import { useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 export function DateFilter({ from, to }: { from?: string; to?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const fromRef = useRef<HTMLInputElement>(null);
+  const toRef = useRef<HTMLInputElement>(null);
 
   function update(key: string, value: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -18,14 +21,17 @@ export function DateFilter({ from, to }: { from?: string; to?: string }) {
   }
 
   function clear() {
+    if (fromRef.current) fromRef.current.value = "";
+    if (toRef.current) toRef.current.value = "";
     router.replace("/");
   }
 
   return (
     <div className="mt-3 flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-        From
+        Opened from
         <input
+          ref={fromRef}
           type="date"
           defaultValue={from}
           onChange={(e) => update("from", e.target.value)}
@@ -33,8 +39,9 @@ export function DateFilter({ from, to }: { from?: string; to?: string }) {
         />
       </label>
       <label className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-        To
+        to
         <input
+          ref={toRef}
           type="date"
           defaultValue={to}
           onChange={(e) => update("to", e.target.value)}
