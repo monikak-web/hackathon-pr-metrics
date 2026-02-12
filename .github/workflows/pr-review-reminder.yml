@@ -8,6 +8,12 @@ on:
     # once per day at 09:00 UTC (e.g. 10:00 / 11:00 in Europe)
     - cron: '0 9 * * *'
   workflow_dispatch:
+    inputs:
+      test_webhook:
+        description: 'Send only a test message to Slack (skip PR check)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   check-and-notify:
@@ -16,10 +22,25 @@ jobs:
       contents: read
       pull-requests: read
     steps:
+      - name: Send test message to Slack
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_webhook == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::SLACK_WEBHOOK_URL not set"
+            exit 1
+          fi
+          PAYLOAD=$(jq -n --arg text "✅ Test from PR Review Reminder – webhook is working!" '{ text: $text }')
+          curl -sS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$SLACK_WEBHOOK_URL"
+          echo "Test message sent."
+
       - name: Checkout
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true'
         uses: actions/checkout@v4
 
       - name: List PRs ready for review > 48h without review
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true'
         id: prs
         env:
           GH_TOKEN: ${{ github.token }}
@@ -29,9 +50,11 @@ jobs:
           REPO="${{ github.repository }}"
           OWNER="${REPO%%/*}"
           REPO_NAME="${REPO##*/}"
-          CUTOFF=$(date -u -d '48 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          # TEMP for testing: 0h = include every open PR. For PRODUCTION change to: 48
+          HOURS_AGO=0
+          CUTOFF=$(date -u -d "${HOURS_AGO} hours ago" +%Y-%m-%dT%H:%M:%SZ)
 
-          # List open PRs (not draft) older than 48h
+          # List open PRs (not draft) older than cutoff
           PR_JSON=$(gh pr list --state open --limit 100 --json number,title,createdAt,isDraft,url,author -q '
             [.[] | select(.isDraft == false) | select(.createdAt < "'"$CUTOFF"'") | {number, title, createdAt, url, author: .author.login}]
           ')
@@ -60,7 +83,7 @@ jobs:
           echo "count=$count" >> "$GITHUB_OUTPUT"
 
       - name: Send Slack notification
-        if: steps.prs.outputs.count != '0'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true') && steps.prs.outputs.count != '0'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           PR_LIST: ${{ steps.prs.outputs.pr_list }}
@@ -80,5 +103,5 @@ jobs:
           curl -sS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$SLACK_WEBHOOK_URL"
 
       - name: Log when nothing to notify
-        if: steps.prs.outputs.count == '0'
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true') && steps.prs.outputs.count == '0'
         run: echo "No PRs ready for review > 48h without review."
