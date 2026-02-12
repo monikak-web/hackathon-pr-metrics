@@ -1,3 +1,6 @@
+export type Priority = "low" | "medium" | "high" | "critical";
+export type ReviewStatus = "pending" | "approved" | "changes_requested";
+
 export interface PrMetric {
   repo: string;
   pr_number: number;
@@ -8,4 +11,8 @@ export interface PrMetric {
   merged_at: string | null;
   duration_ms: number | null;
   was_draft: boolean;
+  priority: Priority;
+  due_date: string | null;
+  qa_review: ReviewStatus;
+  dev_review: ReviewStatus;
 }
