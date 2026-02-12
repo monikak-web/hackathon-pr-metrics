@@ -24,9 +24,8 @@ export async function POST(req: NextRequest) {
   console.log("[webhook] Is PR:", !!payload.pull_request);
   console.log("[webhook] PR merged:", payload.pull_request?.merged);
 
-  // Only process merged PRs
-  if (payload.action !== "closed" || !payload.pull_request?.merged) {
-    console.log("[webhook] Ignored — not a merged PR");
+  if (!payload.pull_request) {
+    console.log("[webhook] Ignored — not a PR event");
     return NextResponse.json({ message: "Ignored" });
   }
 
@@ -34,6 +33,43 @@ export async function POST(req: NextRequest) {
   const repoFullName = payload.repository.full_name;
   const [owner, repo] = repoFullName.split("/");
   const prNumber: number = pr.number;
+
+  // Handle PR opened
+  if (payload.action === "opened") {
+    console.log(`[webhook] Processing opened PR #${prNumber} in ${repoFullName}`);
+
+    const row = {
+      repo: repoFullName,
+      pr_number: prNumber,
+      title: pr.title,
+      author: pr.user.login,
+      opened_at: pr.created_at,
+      ready_at: pr.draft ? null : pr.created_at,
+      merged_at: null,
+      duration_ms: null,
+      was_draft: pr.draft ?? false,
+    };
+
+    console.log("[webhook] Upserting opened PR to Supabase:", JSON.stringify(row));
+
+    const { error } = await supabase
+      .from("pr_metrics")
+      .upsert(row, { onConflict: "repo,pr_number" });
+
+    if (error) {
+      console.error("[webhook] Supabase upsert FAILED:", JSON.stringify(error));
+      return NextResponse.json({ error: "Database error" }, { status: 500 });
+    }
+
+    console.log("[webhook] Upsert successful (opened)");
+    return NextResponse.json({ message: "Recorded (opened)", repo: repoFullName, pr_number: prNumber });
+  }
+
+  // Handle PR merged
+  if (payload.action !== "closed" || !pr.merged) {
+    console.log("[webhook] Ignored — not an opened or merged PR");
+    return NextResponse.json({ message: "Ignored" });
+  }
 
   console.log(`[webhook] Processing merged PR #${prNumber} in ${repoFullName}`);
   console.log(`[webhook] PR title: "${pr.title}" by ${pr.user.login}`);
@@ -63,6 +99,7 @@ export async function POST(req: NextRequest) {
     pr_number: prNumber,
     title: pr.title,
     author: pr.user.login,
+    opened_at: pr.created_at,
     ready_at: readyAt,
     merged_at: pr.merged_at,
     duration_ms: durationMs,
