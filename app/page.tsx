@@ -58,15 +58,6 @@ export default async function Home({
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-        {/* Calendar heatmap spans full width */}
-        <div className="mb-6">
-          <ChartCard
-            title="Merge Activity"
-            description="GitHub-style heatmap of PR merges over the last year"
-          >
-            <CalendarHeatmap data={merged} />
-          </ChartCard>
-        </div>
 
         {/* 2-column grid */}
         <div className="grid gap-6 md:grid-cols-2">
@@ -89,13 +80,6 @@ export default async function Home({
             description="How long PRs take to merge, bucketed by duration"
           >
             <DurationDistribution data={merged} />
-          </ChartCard>
-
-          <ChartCard
-            title="Draft vs Non-Draft"
-            description="Average merge time comparison"
-          >
-            <DraftComparison data={merged} />
           </ChartCard>
 
           <ChartCard
