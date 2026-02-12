@@ -64,7 +64,7 @@ jobs:
             exit 0
           fi
 
-          # For each PR check review count; keep only those with 0 reviews
+          # For each PR check review count; keep only those with 0 reviews; fetch requested reviewers
           NO_REVIEW_PR="[]"
           count=0
           while read -r line; do
@@ -72,6 +72,8 @@ jobs:
             num=$(echo "$line" | jq -r '.number')
             reviews=$(gh api "repos/$REPO/pulls/$num/reviews" --jq 'length')
             if [ "${reviews:-0}" = "0" ]; then
+              requested=$(gh api "repos/$REPO/pulls/$num" --jq '[.requested_reviewers[].login]')
+              line=$(echo "$line" | jq -c --argjson rev "$requested" '. + {requestedReviewers: $rev}')
               NO_REVIEW_PR=$(echo "$NO_REVIEW_PR" | jq -c --argjson pr "$line" '. + [$pr]')
               count=$((count + 1))
             fi
@@ -93,13 +95,41 @@ jobs:
             exit 0
           fi
           REPO="${{ github.repository }}"
-          REPO_URL="https://github.com/$REPO"
-          # Format PR list for Slack message
-          BODY=$(echo "$PR_LIST" | jq -r --arg repo "$REPO" --arg url "$REPO_URL" '
-            "🔔 *PR ready for review > 48h without review* (" + (length | tostring) + " PR)\n\n" +
-            ( [.[] | "- <\(.url)|#\(.number) \(.title)> (\(.author)) – waiting since \(.createdAt[0:10])"] | join("\n") )
+          # Build Slack Block Kit: CTA, then per PR: title link, owner, requested reviewers, button
+          # Slovak date format: d.m.yyyy HH:mm (from ISO createdAt)
+          PAYLOAD=$(echo "$PR_LIST" | jq -c --arg repo "$REPO" '
+            def reviewers: if (.requestedReviewers | length) > 0 then "Review requested from: " + (.requestedReviewers | join(", ")) else "Review requested from: (no one assigned yet)" end;
+            def sk_date: (.createdAt | split("T") as $p | ($p[0] | split("-")) as $d | "\($d[2]).\($d[1]).\($d[0]) \($p[1][0:5])");
+            {
+              blocks: [
+                {
+                  type: "header",
+                  text: { type: "plain_text", text: "PRs waiting for review (>48h)", emoji: true }
+                },
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: "These PRs have had *no review yet*. *Please review when you can* so we keep the flow moving."
+                  }
+                },
+                { type: "divider" },
+                (.[] | {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: "*<\(.url)|\(.title)>*\n• *Owner:* \(.author)\n• \(reviewers)\n• Čaká od \(sk_date)"
+                  },
+                  accessory: {
+                    type: "button",
+                    text: { type: "plain_text", text: "Review PR", emoji: true },
+                    url: .url,
+                    action_id: "review_pr"
+                  }
+                })
+              ]
+            }
           ')
-          PAYLOAD=$(jq -n --arg text "$BODY" '{ text: $text }')
           curl -sS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$SLACK_WEBHOOK_URL"
 
       - name: Log when nothing to notify
