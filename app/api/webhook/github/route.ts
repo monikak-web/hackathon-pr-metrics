@@ -1,6 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifySignature, fetchReadyAt } from "@/lib/github";
 import { supabase } from "@/lib/supabase";
+import type { Priority, ReviewStatus } from "@/lib/types";
+
+const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
+const REVIEW_STATUSES: ReviewStatus[] = ["pending", "approved", "changes_requested"];
+
+function randomPriority(): Priority {
+  return PRIORITIES[Math.floor(Math.random() * PRIORITIES.length)];
+}
+
+function randomReviewStatus(): ReviewStatus {
+  return REVIEW_STATUSES[Math.floor(Math.random() * REVIEW_STATUSES.length)];
+}
+
+function randomDueDate(openedAt: string): string | null {
+  // 80% chance of having a due date, 3-14 days after opened
+  if (Math.random() < 0.2) return null;
+  const opened = new Date(openedAt);
+  const daysAhead = 3 + Math.floor(Math.random() * 12);
+  opened.setDate(opened.getDate() + daysAhead);
+  opened.setHours(17, 0, 0, 0);
+  return opened.toISOString();
+}
 
 export async function POST(req: NextRequest) {
   console.log("[webhook] Received POST request");
@@ -48,6 +70,10 @@ export async function POST(req: NextRequest) {
       merged_at: null,
       duration_ms: null,
       was_draft: pr.draft ?? false,
+      priority: randomPriority(),
+      due_date: randomDueDate(pr.created_at),
+      qa_review: "pending" as ReviewStatus,
+      dev_review: "pending" as ReviewStatus,
     };
 
     console.log("[webhook] Upserting opened PR to Supabase:", JSON.stringify(row));
@@ -104,6 +130,10 @@ export async function POST(req: NextRequest) {
     merged_at: pr.merged_at,
     duration_ms: durationMs,
     was_draft: readyFromTimeline !== null,
+    priority: randomPriority(),
+    due_date: randomDueDate(pr.created_at),
+    qa_review: randomReviewStatus(),
+    dev_review: randomReviewStatus(),
   };
 
   console.log("[webhook] Upserting to Supabase:", JSON.stringify(row));
