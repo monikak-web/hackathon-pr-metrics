@@ -8,7 +8,7 @@ Hackathon: PR metrics – track time from PR ready for review until merge, dashb
 - Setup: add the secret `SLACK_WEBHOOK_URL` in the repo (Slack Incoming Webhook). Steps are in [docs/PLAN-SLACK-NOTIFICATIONS.md](docs/PLAN-SLACK-NOTIFICATIONS.md).
 
 ## Getting Started
-test222
+test222s
 
 First, run the development server:
 
