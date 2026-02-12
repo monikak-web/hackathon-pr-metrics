@@ -1,5 +1,12 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+Hackathon: PR metrics – track time from PR ready for review until merge, dashboard, and **Slack notifications** when a PR is open and ready for review for more than 48h without review.
+
+### Slack notifications (PR > 48h without review)
+
+- Workflow: [`.github/workflows/pr-review-reminder.yml`](.github/workflows/pr-review-reminder.yml) – runs every 12h + manual run.
+- Setup: add the secret `SLACK_WEBHOOK_URL` in the repo (Slack Incoming Webhook). Steps are in [docs/PLAN-SLACK-NOTIFICATIONS.md](docs/PLAN-SLACK-NOTIFICATIONS.md).
+
 ## Getting Started
 
 First, run the development server:

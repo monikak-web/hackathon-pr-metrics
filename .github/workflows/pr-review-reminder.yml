@@ -1,0 +1,84 @@
+# Notify Slack when PR is open and ready for review for more than 48h without review
+# Trigger: every 12h (cron) + manual run (workflow_dispatch)
+
+name: PR Review Reminder – Slack
+
+on:
+  schedule:
+    # every 12 hours (UTC)
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+
+jobs:
+  check-and-notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: List PRs ready for review > 48h without review
+        id: prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          OWNER="${REPO%%/*}"
+          REPO_NAME="${REPO##*/}"
+          CUTOFF=$(date -u -d '48 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+
+          # List open PRs (not draft) older than 48h
+          PR_JSON=$(gh pr list --state open --limit 100 --json number,title,createdAt,isDraft,url,author -q '
+            [.[] | select(.isDraft == false) | select(.createdAt < "'"$CUTOFF"'") | {number, title, createdAt, url, author: .author.login}]
+          ')
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
+            echo "pr_list=[]" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # For each PR check review count; keep only those with 0 reviews
+          NO_REVIEW_PR="[]"
+          count=0
+          while read -r line; do
+            [ -z "$line" ] && continue
+            num=$(echo "$line" | jq -r '.number')
+            reviews=$(gh api "repos/$REPO/pulls/$num/reviews" --jq 'length')
+            if [ "${reviews:-0}" = "0" ]; then
+              NO_REVIEW_PR=$(echo "$NO_REVIEW_PR" | jq -c --argjson pr "$line" '. + [$pr]')
+              count=$((count + 1))
+            fi
+          done < <(echo "$PR_JSON" | jq -c '.[]')
+
+          echo "pr_list<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NO_REVIEW_PR" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        if: steps.prs.outputs.count != '0'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_LIST: ${{ steps.prs.outputs.pr_list }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::SLACK_WEBHOOK_URL not set – skipping Slack notification"
+            exit 0
+          fi
+          REPO="${{ github.repository }}"
+          REPO_URL="https://github.com/$REPO"
+          # Format PR list for Slack message
+          BODY=$(echo "$PR_LIST" | jq -r --arg repo "$REPO" --arg url "$REPO_URL" '
+            "🔔 *PR ready for review > 48h without review* (" + (length | tostring) + " PR)\n\n" +
+            ( [.[] | "- <\(.url)|#\(.number) \(.title)> (\(.author)) – waiting since \(.createdAt[0:10])"] | join("\n") )
+          ')
+          PAYLOAD=$(jq -n --arg text "$BODY" '{ text: $text }')
+          curl -sS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$SLACK_WEBHOOK_URL"
+
+      - name: Log when nothing to notify
+        if: steps.prs.outputs.count == '0'
+        run: echo "No PRs ready for review > 48h without review."
