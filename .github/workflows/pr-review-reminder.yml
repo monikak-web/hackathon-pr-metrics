@@ -1,12 +1,12 @@
 # Notify Slack when PR is open and ready for review for more than 48h without review
-# Trigger: every 12h (cron) + manual run (workflow_dispatch)
+# Trigger: once per day (cron) + manual run (workflow_dispatch)
 
 name: PR Review Reminder – Slack
 
 on:
   schedule:
-    # every 12 hours (UTC)
-    - cron: '0 */12 * * *'
+    # once per day at 09:00 UTC (e.g. 10:00 / 11:00 in Europe)
+    - cron: '0 9 * * *'
   workflow_dispatch:
 
 jobs:

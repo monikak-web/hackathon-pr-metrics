@@ -4,7 +4,7 @@ Hackathon: PR metrics – track time from PR ready for review until merge, dashb
 
 ### Slack notifications (PR > 48h without review)
 
-- Workflow: [`.github/workflows/pr-review-reminder.yml`](.github/workflows/pr-review-reminder.yml) – runs every 12h + manual run.
+- Workflow: [`.github/workflows/pr-review-reminder.yml`](.github/workflows/pr-review-reminder.yml) – runs once per day (09:00 UTC) + manual run.
 - Setup: add the secret `SLACK_WEBHOOK_URL` in the repo (Slack Incoming Webhook). Steps are in [docs/PLAN-SLACK-NOTIFICATIONS.md](docs/PLAN-SLACK-NOTIFICATIONS.md).
 
 ## Getting Started
