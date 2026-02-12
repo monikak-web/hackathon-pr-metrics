@@ -4,6 +4,33 @@ import { useRef, useEffect } from "react";
 import * as d3 from "d3";
 import type { PrMetric } from "@/lib/types";
 
+/** Simple linear regression: returns slope and intercept for y = slope * x + intercept */
+function linearRegression(
+  points: { x: number; y: number }[],
+): { slope: number; intercept: number } {
+  const n = points.length;
+  if (n < 2) return { slope: 0, intercept: points[0]?.y ?? 0 };
+  let sumX = 0,
+    sumY = 0,
+    sumXY = 0,
+    sumX2 = 0;
+  for (const p of points) {
+    sumX += p.x;
+    sumY += p.y;
+    sumXY += p.x * p.y;
+    sumX2 += p.x * p.x;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX) || 0;
+  const intercept = (sumY - slope * sumX) / n;
+  return { slope, intercept };
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
+}
+
 export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
   const svgRef = useRef<SVGSVGElement>(null);
 
@@ -47,9 +74,10 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .domain(d3.extent(parsed, (d) => d.date) as [Date, Date])
       .range([0, width]);
 
+    const yMax = d3.max(parsed, (d) => d.hours)!;
     const y = d3
       .scaleLinear()
-      .domain([0, d3.max(parsed, (d) => d.hours)!])
+      .domain([0, yMax])
       .nice()
       .range([height, 0]);
 
@@ -78,6 +106,59 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .style("font-size", "11px")
       .text("Hours");
 
+    // Median line (horizontal)
+    const medianHours = median(parsed.map((d) => d.hours));
+    g.append("line")
+      .attr("x1", 0)
+      .attr("x2", width)
+      .attr("y1", y(medianHours))
+      .attr("y2", y(medianHours))
+      .attr("stroke", "#4b983d")
+      .attr("stroke-width", 1.5)
+      .attr("stroke-dasharray", "6 4")
+      .attr("opacity", 0.9);
+    g.append("text")
+      .attr("x", width - 4)
+      .attr("y", y(medianHours) - 6)
+      .attr("text-anchor", "end")
+      .attr("fill", "#387f35")
+      .style("font-size", "10px")
+      .style("font-weight", "500")
+      .text(`Median ${medianHours.toFixed(1)}h`);
+
+    // Trend line (linear regression over time order)
+    const regressionPoints = parsed.map((d, i) => ({ x: i, y: d.hours }));
+    const { slope, intercept } = linearRegression(regressionPoints);
+    const trendData = parsed.map((d, i) => ({
+      date: d.date,
+      value: slope * i + intercept,
+    }));
+    const trendLine = d3
+      .line<{ date: Date; value: number }>()
+      .x((d) => x(d.date))
+      .y((d) => y(Math.max(0, d.value)));
+    g.append("path")
+      .datum(trendData)
+      .attr("fill", "none")
+      .attr("stroke", "#ea580c")
+      .attr("stroke-width", 2)
+      .attr("stroke-dasharray", "8 4")
+      .attr("opacity", 0.95)
+      .attr("d", trendLine);
+    const trendLabel =
+      slope > 0.1 ? "Trend ↗ rising" : slope < -0.1 ? "Trend ↘ falling" : "Trend → stable";
+    const lastTrend = trendData[trendData.length - 1];
+    if (lastTrend) {
+      g.append("text")
+        .attr("x", x(lastTrend.date) + 4)
+        .attr("y", y(Math.max(0, lastTrend.value)) - 6)
+        .attr("fill", "#ea580c")
+        .style("font-size", "10px")
+        .style("font-weight", "500")
+        .text(trendLabel);
+    }
+
+    // Main data line
     const line = d3
       .line<(typeof parsed)[0]>()
       .x((d) => x(d.date))
