@@ -32,7 +32,7 @@ export function PriorityMergeTime({ data }: { data: PrMetric[] }) {
       return;
     }
 
-    const margin = { top: 10, right: 20, bottom: 30, left: 120 };
+    const margin = { top: 10, right: 40, bottom: 30, left: 120 };
     const barHeight = 40;
     const height =
       PRIORITY_ORDER.length * barHeight + margin.top + margin.bottom;
@@ -109,7 +109,7 @@ export function PriorityMergeTime({ data }: { data: PrMetric[] }) {
       .attr("dominant-baseline", "central")
       .attr("fill", "#a1a1aa")
       .style("font-size", "10px")
-      .text((d) => (d.avgHours > 0 ? `${d.avgHours.toFixed(1)}h` : ""));
+      .text((d) => (d.avgHours > 0 ? `${Math.round(d.avgHours)}h` : ""));
 
     g.append("text")
       .attr("x", width / 2)

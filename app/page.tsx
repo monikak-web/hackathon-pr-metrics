@@ -19,6 +19,15 @@ import { ReviewStatusOverview } from "@/components/charts/ReviewStatusOverview";
 
 export const dynamic = "force-dynamic";
 
+function getDefaultDateRange(): { from: string; to: string } {
+  const now = new Date();
+  const to = now.toISOString().slice(0, 10); // YYYY-MM-DD
+  const fromDate = new Date(now);
+  fromDate.setDate(fromDate.getDate() - 30);
+  const from = fromDate.toISOString().slice(0, 10);
+  return { from, to };
+}
+
 export default async function Home({
   searchParams,
 }: {
@@ -31,20 +40,23 @@ export default async function Home({
     view?: string;
   }>;
 }) {
-  const { from, to, author, repo, priority, view: viewParam } = await searchParams;
+  const params = await searchParams;
+  const { author, priority, view: viewParam } = params;
   const view = viewParam === "table" ? "table" : "dashboard";
+  // Default repo filter when not in URL; empty string in URL means "All"
+  const repo = params.repo === undefined ? "acme/platform" : (params.repo || undefined);
+
+  const defaultRange = getDefaultDateRange();
+  const from = params.from ?? defaultRange.from;
+  const to = params.to ?? defaultRange.to;
 
   let query = supabase
     .from("pr_metrics")
     .select("*")
     .order("merged_at", { ascending: true });
 
-  if (from) {
-    query = query.gte("opened_at", from);
-  }
-  if (to) {
-    query = query.lte("opened_at", to + "T23:59:59");
-  }
+  query = query.gte("opened_at", from);
+  query = query.lte("opened_at", to + "T23:59:59");
   if (author) {
     query = query.eq("author", author);
   }
@@ -61,14 +73,27 @@ export default async function Home({
 
   // Options for dropdowns: distinct authors/repos in the selected date range (ignore author/repo/priority)
   let optQuery = supabase.from("pr_metrics").select("author, repo");
-  if (from) optQuery = optQuery.gte("opened_at", from);
-  if (to) optQuery = optQuery.lte("opened_at", to + "T23:59:59");
+  optQuery = optQuery.gte("opened_at", from);
+  optQuery = optQuery.lte("opened_at", to + "T23:59:59");
   const { data: optData } = await optQuery;
   const all = (optData ?? []) as { author: string; repo: string }[];
   const authors = [...new Set(all.map((r) => r.author))].filter(Boolean).sort();
   const repos = [...new Set(all.map((r) => r.repo))].filter(Boolean).sort();
 
   const merged = metrics.filter((m) => m.merged_at !== null);
+
+  const avgOpenToMergeDays =
+    merged.length > 0
+      ? (() => {
+          const msPerDay = 1000 * 60 * 60 * 24;
+          const days = merged.map((m) => {
+            const opened = new Date(m.opened_at).getTime();
+            const mergedAt = new Date(m.merged_at!).getTime();
+            return (mergedAt - opened) / msPerDay;
+          });
+          return days.reduce((a, b) => a + b, 0) / days.length;
+        })()
+      : null;
 
   return (
     <div className="min-h-screen bg-[var(--k-gray-50)]">
@@ -115,11 +140,31 @@ export default async function Home({
         </div>
       </header>
 
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      {view !== "table" && (
+        <div className="border-b border-[var(--k-gray-200)] bg-white py-2">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 text-sm sm:px-6">
+            <span className="text-[var(--k-gray-500)]">Avg open → merge</span>
+            {avgOpenToMergeDays != null ? (
+              <>
+                <span className="font-semibold tabular-nums text-[var(--k-green-600)]">
+                  {avgOpenToMergeDays.toFixed(1)} days
+                </span>
+                <span className="text-[var(--k-gray-400)]">
+                  · {merged.length} PR{merged.length !== 1 ? "s" : ""} merged
+                </span>
+              </>
+            ) : (
+              <span className="text-[var(--k-gray-400)]">—</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
         {view === "table" ? (
           <DataTable data={metrics} />
         ) : (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid items-start gap-6 md:grid-cols-2">
           <ChartCard
             title="Merge Time Trend"
             description="Duration from ready to merge over time"

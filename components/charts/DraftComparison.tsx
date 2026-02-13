@@ -102,7 +102,7 @@ export function DraftComparison({ data }: { data: PrMetric[] }) {
       .attr("text-anchor", "middle")
       .attr("fill", "#71717a")
       .style("font-size", "11px")
-      .text((d) => `${d.avgHours.toFixed(1)}h (${d.count} PRs)`);
+      .text((d) => `${Math.round(d.avgHours)}h (${d.count} PRs)`);
 
     // Y axis label
     g.append("text")

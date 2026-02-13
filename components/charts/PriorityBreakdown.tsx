@@ -104,7 +104,7 @@ export function PriorityBreakdown({ data }: { data: PrMetric[] }) {
       .attr("fill", "#71717a")
       .style("font-size", "10px")
       .text((d) =>
-        d.count > 0 ? `${d.count} (${d.avgHours.toFixed(1)}h)` : "",
+        d.count > 0 ? `${d.count} (${Math.round(d.avgHours)}h)` : "",
       );
 
     g.append("text")

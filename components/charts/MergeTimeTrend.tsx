@@ -51,7 +51,7 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       return;
     }
 
-    const margin = { top: 20, right: 20, bottom: 40, left: 60 };
+    const margin = { top: 20, right: 72, bottom: 40, left: 60 };
     const width = 600 - margin.left - margin.right;
     const height = 300 - margin.top - margin.bottom;
 
@@ -124,7 +124,7 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .attr("fill", "#387f35")
       .style("font-size", "10px")
       .style("font-weight", "500")
-      .text(`Median ${medianHours.toFixed(1)}h`);
+      .text(`Median ${Math.round(medianHours)}h`);
 
     // Trend line (linear regression over time order)
     const regressionPoints = parsed.map((d, i) => ({ x: i, y: d.hours }));
@@ -146,12 +146,14 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .attr("opacity", 0.95)
       .attr("d", trendLine);
     const trendLabel =
-      slope > 0.1 ? "Trend ↗ rising" : slope < -0.1 ? "Trend ↘ falling" : "Trend → stable";
+      slope > 0.1 ? "Trend ↗" : slope < -0.1 ? "Trend ↘" : "Trend →";
     const lastTrend = trendData[trendData.length - 1];
     if (lastTrend) {
       g.append("text")
-        .attr("x", x(lastTrend.date) + 4)
+        .attr("x", x(lastTrend.date))
         .attr("y", y(Math.max(0, lastTrend.value)) - 6)
+        .attr("text-anchor", "end")
+        .attr("dx", -4)
         .attr("fill", "#ea580c")
         .style("font-size", "10px")
         .style("font-weight", "500")
@@ -191,7 +193,7 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
         tooltip
           .classed("hidden", false)
           .html(
-            `<strong>${d.title}</strong><br/>${d.hours.toFixed(1)}h — ${d.date.toLocaleDateString()}`,
+            `<strong>${d.title}</strong><br/>${Math.round(d.hours)}h — ${d.date.toLocaleDateString()}`,
           )
           .style("left", `${event.offsetX + 10}px`)
           .style("top", `${event.offsetY - 10}px`);

@@ -35,7 +35,7 @@ export function RepoComparison({ data }: { data: PrMetric[] }) {
       avgHours,
     })).sort((a, b) => b.avgHours - a.avgHours);
 
-    const margin = { top: 10, right: 20, bottom: 30, left: 140 };
+    const margin = { top: 10, right: 40, bottom: 30, left: 140 };
     const barHeight = 30;
     const height = entries.length * barHeight + margin.top + margin.bottom;
     const width = 600 - margin.left - margin.right;
@@ -98,7 +98,7 @@ export function RepoComparison({ data }: { data: PrMetric[] }) {
       .attr("dominant-baseline", "central")
       .attr("fill", "#a1a1aa")
       .style("font-size", "10px")
-      .text((d) => `${d.avgHours.toFixed(1)}h`);
+      .text((d) => `${Math.round(d.avgHours)}h`);
 
     // X axis label
     g.append("text")
