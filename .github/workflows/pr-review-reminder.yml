@@ -1,0 +1,160 @@
+# Notify Slack when PR is open and ready for review for more than 48h without review
+# Trigger: once per day (cron) + manual run (workflow_dispatch)
+
+name: PR Review Reminder – Slack
+
+on:
+  schedule:
+    # once per day at 09:00 UTC (e.g. 10:00 / 11:00 in Europe)
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      test_webhook:
+        description: 'Send only a test message to Slack (skip PR check)'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  check-and-notify:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Send test message to Slack
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_webhook == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::SLACK_WEBHOOK_URL not set"
+            exit 1
+          fi
+          PAYLOAD=$(jq -n --arg text "✅ Test from PR Review Reminder – webhook is working!" '{ text: $text }')
+          curl -sS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$SLACK_WEBHOOK_URL"
+          echo "Test message sent."
+
+      - name: Checkout
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true'
+        uses: actions/checkout@v4
+
+      - name: List PRs ready for review > 48h without review
+        if: github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true'
+        id: prs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          set -e
+          REPO="${{ github.repository }}"
+          OWNER="${REPO%%/*}"
+          REPO_NAME="${REPO##*/}"
+          # TEMP for testing: 0h = include every open PR. For PRODUCTION change to: 48
+          HOURS_AGO=0
+          CUTOFF=$(date -u -d "${HOURS_AGO} hours ago" +%Y-%m-%dT%H:%M:%SZ)
+
+          # List open PRs (not draft) older than cutoff
+          PR_JSON=$(gh pr list --state open --limit 100 --json number,title,createdAt,isDraft,url,author -q '
+            [.[] | select(.isDraft == false) | select(.createdAt < "'"$CUTOFF"'") | {number, title, createdAt, url, author: .author.login}]
+          ')
+          if [ -z "$PR_JSON" ] || [ "$PR_JSON" = "[]" ]; then
+            echo "pr_list=[]" >> "$GITHUB_OUTPUT"
+            echo "count=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # For each PR: 0 reviews, fetch requested reviewers + labels (for priority, QE/DEV)
+          NO_REVIEW_PR="[]"
+          count=0
+          while read -r line; do
+            [ -z "$line" ] && continue
+            num=$(echo "$line" | jq -r '.number')
+            reviews=$(gh api "repos/$REPO/pulls/$num/reviews" --jq 'length')
+            if [ "${reviews:-0}" = "0" ]; then
+              extra=$(gh api "repos/$REPO/pulls/$num" --jq '{ requestedReviewers: [.requested_reviewers[].login], labels: [.labels[].name] }')
+              line=$(echo "$line" | jq -c --argjson ext "$extra" '. + $ext')
+              NO_REVIEW_PR=$(echo "$NO_REVIEW_PR" | jq -c --argjson pr "$line" '. + [$pr]')
+              count=$((count + 1))
+            fi
+          done < <(echo "$PR_JSON" | jq -c '.[]')
+
+          echo "pr_list<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NO_REVIEW_PR" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+      - name: Send Slack notification
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true') && steps.prs.outputs.count != '0'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          PR_LIST: ${{ steps.prs.outputs.pr_list }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::warning::SLACK_WEBHOOK_URL not set – skipping Slack notification"
+            exit 0
+          fi
+          REPO="${{ github.repository }}"
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          # Build Slack Block Kit: duration, priority + DEV/QE badges, title, owner, reviewers
+          PAYLOAD=$(echo "$PR_LIST" | jq -c --arg repo "$REPO" --arg now "$NOW" '
+            def reviewers: if (.requestedReviewers | length) > 0 then "Review requested from: " + (.requestedReviewers | join(", ")) else "Review requested from: (no one assigned yet)" end;
+            def sk_date: (.createdAt | split("T") as $p | ($p[0] | split("-")) as $d | "\($d[2]).\($d[1]).\($d[0]) \($p[1][0:5])");
+            def duration_en:
+              (($now | fromdateiso8601) - (.createdAt | fromdateiso8601)) as $diff
+              | ($diff / 86400 | floor) as $days
+              | if $days >= 30 then ($days / 30 | floor) as $m | (if $m == 1 then "1 month" else "\($m) months" end)
+                elif $days >= 7 then ($days / 7 | floor) as $w | (if $w == 1 then "1 week" else "\($w) weeks" end)
+                elif $days >= 1 then (if $days == 1 then "1 day" else "\($days) days" end)
+                else "less than 1 day" end;
+            def labels_lc: (.labels // []) | map(ascii_downcase);
+            def priority:
+              labels_lc as $l
+              | if ($l | any(test("high|p0|priority.?high|critical"))) then "🔴 High"
+                elif ($l | any(test("low|p2|priority.?low"))) then "🟢 Low"
+                else "🟡 Medium" end;
+            def dev_review: "DEV: ❌ Needed";
+            def qe_review: if (labels_lc | any(test("qe.?done|qe.?approved|qe-approved|qe.done"))) then "QE: ✅ Done" else "QE: ❌ Needed" end;
+            {
+              blocks: ([
+                {
+                  type: "header",
+                  text: { type: "plain_text", text: "PRs waiting for review (>48h)", emoji: true }
+                },
+                {
+                  type: "section",
+                  text: {
+                    type: "mrkdwn",
+                    text: "These PRs have had *no review yet*. *Please review when you can* so we keep the flow moving."
+                  }
+                },
+                { type: "divider" },
+                (.[] | [
+                  {
+                    type: "context",
+                    elements: [
+                      { type: "mrkdwn", text: "\(priority)   ·   \(dev_review)   ·   \(qe_review)" }
+                    ]
+                  },
+                  {
+                    type: "section",
+                    text: {
+                      type: "mrkdwn",
+                      text: "*<\(.url)|\(.title)>*\n*Waiting \(duration_en)*\n• *Owner:* \(.author)\n• \(reviewers)\n• Since \(sk_date)"
+                    },
+                    accessory: {
+                      type: "button",
+                      text: { type: "plain_text", text: "Review PR", emoji: true },
+                      url: .url,
+                      action_id: "review_pr"
+                    }
+                  }
+                ])
+              ] | flatten)
+            }
+          ')
+          curl -sS -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$SLACK_WEBHOOK_URL"
+
+      - name: Log when nothing to notify
+        if: (github.event_name != 'workflow_dispatch' || github.event.inputs.test_webhook != 'true') && steps.prs.outputs.count == '0'
+        run: echo "No PRs ready for review > 48h without review."

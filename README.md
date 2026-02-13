@@ -25,7 +25,7 @@ This dashboard makes PR review performance transparent so engineering managers c
 1. **GitHub Webhook** receives PR events (opened, merged) and saves metrics to the database
 2. **Supabase (PostgreSQL)** stores all PR metrics including timestamps, priority, due dates, and review statuses
 3. **Dashboard** displays interactive D3.js charts with date range filtering
-4. **Notifications** (planned) — Slack alerts when a PR hasn't been reviewed within X hours
+4. **Slack Notifications** — Alerts when a PR has been open > 48 hours without review
 
 ### Architecture
 
@@ -53,6 +53,14 @@ This dashboard makes PR review performance transparent so engineering managers c
 - **Due date tracking** — Compare merged date against due date
 - **Review statuses** — QA review and Dev review (pending, approved, changes requested)
 
+### Slack Notifications (PR > 48h without review)
+
+A GitHub Actions workflow sends a Slack message for any PR that has been open longer than 48 hours without being merged.
+
+- **Workflow:** `.github/workflows/pr-review-reminder.yml` — runs daily at 09:00 UTC + supports manual trigger
+- **Setup:** Add the `SLACK_WEBHOOK_URL` secret to the repo (Slack Incoming Webhook)
+- **Details:** See [docs/PLAN-SLACK-NOTIFICATIONS.md](docs/PLAN-SLACK-NOTIFICATIONS.md)
+
 ## Tech Stack
 
 | Tool | Purpose |
@@ -62,6 +70,8 @@ This dashboard makes PR review performance transparent so engineering managers c
 | **Supabase** | Hosted PostgreSQL database |
 | **Vercel** | Deployment |
 | **GitHub Webhooks** | Real-time PR event ingestion |
+| **GitHub Actions** | Scheduled Slack notifications |
+| **Slack Incoming Webhooks** | PR review reminders |
 | **Claude AI** | AI-assisted development |
 
 ## Getting Started

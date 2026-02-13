@@ -24,16 +24,17 @@ export function AuthorLeaderboard({ data }: { data: PrMetric[] }) {
       return;
     }
 
+    const msPerDay = 1000 * 60 * 60 * 24;
     const grouped = d3.rollup(
       data,
-      (v) => d3.mean(v, (d) => d.duration_ms!)! / (1000 * 60 * 60),
+      (v) => d3.mean(v, (d) => d.duration_ms!)! / msPerDay,
       (d) => d.author,
     );
 
-    const entries = Array.from(grouped, ([author, avgHours]) => ({
+    const entries = Array.from(grouped, ([author, avgDays]) => ({
       author,
-      avgHours,
-    })).sort((a, b) => b.avgHours - a.avgHours);
+      avgDays,
+    })).sort((a, b) => b.avgDays - a.avgDays);
 
     const margin = { top: 10, right: 20, bottom: 30, left: 120 };
     const barHeight = 28;
@@ -48,7 +49,7 @@ export function AuthorLeaderboard({ data }: { data: PrMetric[] }) {
 
     const x = d3
       .scaleLinear()
-      .domain([0, d3.max(entries, (d) => d.avgHours)!])
+      .domain([0, d3.max(entries, (d) => d.avgDays)!])
       .nice()
       .range([0, width]);
 
@@ -60,7 +61,7 @@ export function AuthorLeaderboard({ data }: { data: PrMetric[] }) {
 
     const color = d3
       .scaleSequential(d3.interpolateRdYlGn)
-      .domain([d3.max(entries, (d) => d.avgHours)!, 0]);
+      .domain([d3.max(entries, (d) => d.avgDays)!, 0]);
 
     g.append("g")
       .attr(
@@ -79,9 +80,9 @@ export function AuthorLeaderboard({ data }: { data: PrMetric[] }) {
       .join("rect")
       .attr("x", 0)
       .attr("y", (d) => y(d.author)!)
-      .attr("width", (d) => x(d.avgHours))
+      .attr("width", (d) => x(d.avgDays))
       .attr("height", y.bandwidth())
-      .attr("fill", (d) => color(d.avgHours))
+      .attr("fill", (d) => color(d.avgDays))
       .attr("rx", 4);
 
     g.selectAll(".author-label")
@@ -98,12 +99,12 @@ export function AuthorLeaderboard({ data }: { data: PrMetric[] }) {
     g.selectAll(".value-label")
       .data(entries)
       .join("text")
-      .attr("x", (d) => x(d.avgHours) + 4)
+      .attr("x", (d) => x(d.avgDays) + 4)
       .attr("y", (d) => y(d.author)! + y.bandwidth() / 2)
       .attr("dominant-baseline", "central")
       .attr("fill", "#a1a1aa")
       .style("font-size", "10px")
-      .text((d) => `${d.avgHours.toFixed(1)}h`);
+      .text((d) => `${d.avgDays.toFixed(1)}d`);
 
     // X axis label
     g.append("text")
@@ -112,7 +113,7 @@ export function AuthorLeaderboard({ data }: { data: PrMetric[] }) {
       .attr("text-anchor", "middle")
       .attr("fill", "#a1a1aa")
       .style("font-size", "11px")
-      .text("Avg hours");
+      .text("Avg days");
   }, [data]);
 
   return <svg ref={svgRef} className="w-full" />;

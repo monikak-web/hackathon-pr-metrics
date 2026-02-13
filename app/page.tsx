@@ -1,7 +1,10 @@
+import Image from "next/image";
 import { supabase } from "@/lib/supabase";
 import type { PrMetric } from "@/lib/types";
 import { ChartCard } from "@/components/ChartCard";
-import { DateFilter } from "@/components/DateFilter";
+import { DashboardFilters } from "@/components/DashboardFilters";
+import { ViewToggle } from "@/components/ViewToggle";
+import { DataTable } from "@/components/DataTable";
 import { MergeTimeTrend } from "@/components/charts/MergeTimeTrend";
 import { AuthorLeaderboard } from "@/components/charts/AuthorLeaderboard";
 import { WeeklyThroughput } from "@/components/charts/WeeklyThroughput";
@@ -19,9 +22,17 @@ export const dynamic = "force-dynamic";
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{
+    from?: string;
+    to?: string;
+    author?: string;
+    repo?: string;
+    priority?: string;
+    view?: string;
+  }>;
 }) {
-  const { from, to } = await searchParams;
+  const { from, to, author, repo, priority, view: viewParam } = await searchParams;
+  const view = viewParam === "table" ? "table" : "dashboard";
 
   let query = supabase
     .from("pr_metrics")
@@ -34,45 +45,86 @@ export default async function Home({
   if (to) {
     query = query.lte("opened_at", to + "T23:59:59");
   }
+  if (author) {
+    query = query.eq("author", author);
+  }
+  if (repo) {
+    query = query.eq("repo", repo);
+  }
+  if (priority) {
+    query = query.eq("priority", priority);
+  }
 
   const { data, error } = await query;
 
   const metrics: PrMetric[] = data ?? [];
+
+  // Options for dropdowns: distinct authors/repos in the selected date range (ignore author/repo/priority)
+  let optQuery = supabase.from("pr_metrics").select("author, repo");
+  if (from) optQuery = optQuery.gte("opened_at", from);
+  if (to) optQuery = optQuery.lte("opened_at", to + "T23:59:59");
+  const { data: optData } = await optQuery;
+  const all = (optData ?? []) as { author: string; repo: string }[];
+  const authors = [...new Set(all.map((r) => r.author))].filter(Boolean).sort();
+  const repos = [...new Set(all.map((r) => r.repo))].filter(Boolean).sort();
+
   const merged = metrics.filter((m) => m.merged_at !== null);
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <header className="border-b border-zinc-200 bg-white px-6 py-6 dark:border-zinc-800 dark:bg-zinc-900">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-          PR Metrics Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          {metrics.length} pull requests tracked &middot; {merged.length} merged
-          {error && (
-            <span className="ml-2 text-red-500">
-              (Error loading data: {error.message})
-            </span>
-          )}
-        </p>
-        <DateFilter from={from} to={to} />
+    <div className="min-h-screen bg-[var(--k-gray-50)]">
+      <header className="border-b border-[var(--k-gray-800)] bg-[var(--header-bg)] px-6 py-4">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4">
+          <div className="flex w-full items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Image
+                src="/logo-white.png"
+                alt="Ketryx"
+                width={120}
+                height={32}
+                className="h-8 w-auto object-contain"
+                priority
+              />
+              <span className="text-lg font-semibold text-[var(--header-fg)]">
+                PR Metrics Dashboard
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <p className="text-sm text-[var(--k-gray-400)]">
+                {metrics.length} PRs tracked · {merged.length} merged
+                {error && (
+                  <span className="ml-2 text-red-400">
+                    (Error: {error.message})
+                  </span>
+                )}
+              </p>
+              <ViewToggle view={view} />
+            </div>
+          </div>
+          <div className="flex w-full justify-center">
+            <DashboardFilters
+              from={from}
+              to={to}
+              author={author}
+              repo={repo}
+              priority={priority}
+              authors={authors}
+              repos={repos}
+              variant="dark"
+            />
+          </div>
+        </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
-
-        {/* 2-column grid */}
-        <div className="grid gap-6 md:grid-cols-2">
+        {view === "table" ? (
+          <DataTable data={metrics} />
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2">
           <ChartCard
             title="Merge Time Trend"
             description="Duration from ready to merge over time"
           >
             <MergeTimeTrend data={merged} />
-          </ChartCard>
-
-          <ChartCard
-            title="Weekly Throughput"
-            description="Number of PRs merged per week"
-          >
-            <WeeklyThroughput data={merged} />
           </ChartCard>
 
           <ChartCard
@@ -123,7 +175,15 @@ export default async function Home({
           >
             <ReviewStatusOverview data={metrics} />
           </ChartCard>
+
+          <ChartCard
+            title="Weekly Throughput"
+            description="Number of PRs merged per week"
+          >
+            <WeeklyThroughput data={merged} />
+          </ChartCard>
         </div>
+        )}
       </main>
     </div>
   );
