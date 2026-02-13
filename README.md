@@ -2,6 +2,8 @@
 
 A hackathon project built to track and visualize pull request review bottlenecks, helping engineering teams merge code faster and ship value to customers sooner.
 
+**Live demo:** [hackethon-pr-metrics.vercel.app](https://hackethon-pr-metrics.vercel.app/)
+
 ## Goal
 
 Track the R&D objective: **Fast iteration with maximal AI use** — PRs are merged within 48 hours after being ready for review (p90).
