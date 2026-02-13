@@ -64,7 +64,7 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
     const parsed = data
       .map((d) => ({
         date: new Date(d.merged_at!),
-        hours: d.duration_ms! / (1000 * 60 * 60),
+        days: d.duration_ms! / (1000 * 60 * 60 * 24),
         title: d.title,
       }))
       .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -74,7 +74,7 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .domain(d3.extent(parsed, (d) => d.date) as [Date, Date])
       .range([0, width]);
 
-    const yMax = d3.max(parsed, (d) => d.hours)!;
+    const yMax = d3.max(parsed, (d) => d.days)!;
     const y = d3
       .scaleLinear()
       .domain([0, yMax])
@@ -104,30 +104,30 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .attr("text-anchor", "middle")
       .attr("fill", "#a1a1aa")
       .style("font-size", "11px")
-      .text("Hours");
+      .text("Days");
 
     // Median line (horizontal)
-    const medianHours = median(parsed.map((d) => d.hours));
+    const medianDays = median(parsed.map((d) => d.days));
     g.append("line")
       .attr("x1", 0)
       .attr("x2", width)
-      .attr("y1", y(medianHours))
-      .attr("y2", y(medianHours))
+      .attr("y1", y(medianDays))
+      .attr("y2", y(medianDays))
       .attr("stroke", "#4b983d")
       .attr("stroke-width", 1.5)
       .attr("stroke-dasharray", "6 4")
       .attr("opacity", 0.9);
     g.append("text")
       .attr("x", width - 4)
-      .attr("y", y(medianHours) - 6)
+      .attr("y", y(medianDays) - 6)
       .attr("text-anchor", "end")
       .attr("fill", "#387f35")
       .style("font-size", "10px")
       .style("font-weight", "500")
-      .text(`Median ${Math.round(medianHours)}h`);
+      .text(`Median ${medianDays.toFixed(1)}d`);
 
     // Trend line (linear regression over time order)
-    const regressionPoints = parsed.map((d, i) => ({ x: i, y: d.hours }));
+    const regressionPoints = parsed.map((d, i) => ({ x: i, y: d.days }));
     const { slope, intercept } = linearRegression(regressionPoints);
     const trendData = parsed.map((d, i) => ({
       date: d.date,
@@ -164,7 +164,7 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
     const line = d3
       .line<(typeof parsed)[0]>()
       .x((d) => x(d.date))
-      .y((d) => y(d.hours));
+      .y((d) => y(d.days));
 
     g.append("path")
       .datum(parsed)
@@ -186,14 +186,14 @@ export function MergeTimeTrend({ data }: { data: PrMetric[] }) {
       .data(parsed)
       .join("circle")
       .attr("cx", (d) => x(d.date))
-      .attr("cy", (d) => y(d.hours))
+      .attr("cy", (d) => y(d.days))
       .attr("r", 3)
       .attr("fill", "#6366f1")
       .on("mouseenter", (event, d) => {
         tooltip
           .classed("hidden", false)
           .html(
-            `<strong>${d.title}</strong><br/>${Math.round(d.hours)}h — ${d.date.toLocaleDateString()}`,
+            `<strong>${d.title}</strong><br/>${d.days.toFixed(1)}d — ${d.date.toLocaleDateString()}`,
           )
           .style("left", `${event.offsetX + 10}px`)
           .style("top", `${event.offsetY - 10}px`);

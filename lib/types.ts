@@ -1,4 +1,4 @@
-export type Priority = "low" | "medium" | "high" | "critical";
+export type Priority = "lowest" | "low" | "medium" | "high" | "highest";
 export type ReviewStatus = "pending" | "approved" | "changes_requested";
 
 export interface PrMetric {
@@ -15,4 +15,5 @@ export interface PrMetric {
   due_date: string | null;
   qa_review: ReviewStatus;
   dev_review: ReviewStatus;
+  jira_ticket: string | null;
 }

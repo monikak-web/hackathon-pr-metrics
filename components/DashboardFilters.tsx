@@ -6,10 +6,11 @@ import type { Priority } from "@/lib/types";
 
 const PRIORITIES: { value: "" | Priority; label: string }[] = [
   { value: "", label: "All" },
+  { value: "highest", label: "Highest" },
   { value: "high", label: "High" },
   { value: "medium", label: "Medium" },
   { value: "low", label: "Low" },
-  { value: "critical", label: "Critical" },
+  { value: "lowest", label: "Lowest" },
 ];
 
 export function DashboardFilters({

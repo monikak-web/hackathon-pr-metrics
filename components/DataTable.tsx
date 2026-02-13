@@ -12,14 +12,16 @@ type SortKey =
   | "duration"
   | "priority"
   | "dev_review"
-  | "qa_review";
+  | "qa_review"
+  | "jira_ticket";
 type SortDir = "asc" | "desc";
 
 const PRIORITY_ORDER: Record<Priority, number> = {
-  low: 0,
-  medium: 1,
-  high: 2,
-  critical: 3,
+  lowest: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+  highest: 4,
 };
 const REVIEW_ORDER: Record<ReviewStatus, number> = {
   approved: 0,
@@ -140,6 +142,9 @@ function compareRows(a: PrMetric, b: PrMetric, key: SortKey, dir: SortDir, nowMs
     case "qa_review":
       cmp = REVIEW_ORDER[a.qa_review] - REVIEW_ORDER[b.qa_review];
       break;
+    case "jira_ticket":
+      cmp = (a.jira_ticket ?? "").localeCompare(b.jira_ticket ?? "");
+      break;
     default:
       return 0;
   }
@@ -187,15 +192,16 @@ export function DataTable({ data }: { data: PrMetric[] }) {
         <table className="w-full table-fixed text-left text-sm">
           <colgroup>
             <col className="w-[4%]" />
-            <col className="w-[22%]" />
+            <col className="w-[19%]" />
+            <col className="w-[9%]" />
             <col className="w-[10%]" />
-            <col className="w-[11%]" />
-            <col className="w-[11%]" />
+            <col className="w-[10%]" />
+            <col className="w-[7%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
+            <col className="w-[8%]" />
             <col className="w-[8%]" />
             <col className="w-[9%]" />
-            <col className="w-[9%]" />
-            <col className="w-[8%]" />
-            <col className="w-[8%]" />
           </colgroup>
           <thead>
             <tr className="border-b border-[var(--k-gray-200)] bg-[var(--k-gray-50)]">
@@ -280,6 +286,15 @@ export function DataTable({ data }: { data: PrMetric[] }) {
                   QE review <SortIcon dir={sortDir} active={sortKey === "qa_review"} />
                 </button>
               </th>
+              <th className="px-2 py-3">
+                <button
+                  type="button"
+                  onClick={() => handleSort("jira_ticket")}
+                  className="flex w-full items-center font-semibold text-[var(--k-gray-900)] hover:text-[var(--k-gray-700)]"
+                >
+                  Jira <SortIcon dir={sortDir} active={sortKey === "jira_ticket"} />
+                </button>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -343,11 +358,13 @@ export function DataTable({ data }: { data: PrMetric[] }) {
                 <td className="px-2 py-2.5">
                   <span
                     className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                      row.priority === "high" || row.priority === "critical"
+                      row.priority === "highest"
                         ? "bg-red-100 text-red-800"
-                        : row.priority === "medium"
-                          ? "bg-amber-100 text-amber-800"
-                          : "bg-[var(--k-gray-200)] text-[var(--k-gray-700)]"
+                        : row.priority === "high"
+                          ? "bg-orange-100 text-orange-800"
+                          : row.priority === "medium"
+                            ? "bg-amber-100 text-amber-800"
+                            : "bg-[var(--k-gray-200)] text-[var(--k-gray-700)]"
                     }`}
                   >
                     {row.priority}
@@ -358,6 +375,20 @@ export function DataTable({ data }: { data: PrMetric[] }) {
                 </td>
                 <td className="px-2 py-2.5">
                   <ReviewStatusIcon status={row.qa_review} />
+                </td>
+                <td className="truncate px-2 py-2.5 text-[var(--k-gray-700)]" title={row.jira_ticket ?? undefined}>
+                  {row.jira_ticket ? (
+                    <a
+                      href={`https://ketryx.atlassian.net/browse/${row.jira_ticket}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[var(--k-blue-600)] hover:underline"
+                    >
+                      {row.jira_ticket}
+                    </a>
+                  ) : (
+                    <span className="text-[var(--k-gray-400)]">—</span>
+                  )}
                 </td>
               </tr>
             ))}

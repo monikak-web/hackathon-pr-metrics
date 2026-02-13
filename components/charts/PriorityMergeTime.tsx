@@ -4,12 +4,13 @@ import { useRef, useEffect } from "react";
 import * as d3 from "d3";
 import type { PrMetric, Priority } from "@/lib/types";
 
-const PRIORITY_ORDER: Priority[] = ["critical", "high", "medium", "low"];
+const PRIORITY_ORDER: Priority[] = ["highest", "high", "medium", "low", "lowest"];
 const PRIORITY_COLORS: Record<Priority, string> = {
-  critical: "#ef4444",
+  highest: "#ef4444",
   high: "#f97316",
   medium: "#eab308",
   low: "#22c55e",
+  lowest: "#a1a1aa",
 };
 
 export function PriorityMergeTime({ data }: { data: PrMetric[] }) {

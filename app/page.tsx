@@ -7,6 +7,7 @@ import { ViewToggle } from "@/components/ViewToggle";
 import { DataTable } from "@/components/DataTable";
 import { MergeTimeTrend } from "@/components/charts/MergeTimeTrend";
 import { AuthorLeaderboard } from "@/components/charts/AuthorLeaderboard";
+import { MedianAuthorLeaderboard } from "@/components/charts/MedianAuthorLeaderboard";
 import { WeeklyThroughput } from "@/components/charts/WeeklyThroughput";
 import { DurationDistribution } from "@/components/charts/DurationDistribution";
 import { DraftComparison } from "@/components/charts/DraftComparison";
@@ -70,7 +71,7 @@ export default async function Home({
 
   const metrics: PrMetric[] = data ?? [];
 
-  // Options for dropdowns: distinct authors/repos in the selected date range (ignore author/repo/priority)
+  // Options for dropdowns: distinct authors/repos in the selected date range
   let optQuery = supabase.from("pr_metrics").select("author, repo");
   optQuery = optQuery.gte("opened_at", from);
   optQuery = optQuery.lte("opened_at", to + "T23:59:59");
@@ -81,16 +82,29 @@ export default async function Home({
 
   const merged = metrics.filter((m) => m.merged_at !== null);
 
-  const avgOpenToMergeDays =
+  const mergeDays =
     merged.length > 0
-      ? (() => {
+      ? merged.map((m) => {
           const msPerDay = 1000 * 60 * 60 * 24;
-          const days = merged.map((m) => {
-            const opened = new Date(m.opened_at).getTime();
-            const mergedAt = new Date(m.merged_at!).getTime();
-            return (mergedAt - opened) / msPerDay;
-          });
-          return days.reduce((a, b) => a + b, 0) / days.length;
+          const opened = new Date(m.opened_at).getTime();
+          const mergedAt = new Date(m.merged_at!).getTime();
+          return (mergedAt - opened) / msPerDay;
+        })
+      : [];
+
+  const avgOpenToMergeDays =
+    mergeDays.length > 0
+      ? mergeDays.reduce((a, b) => a + b, 0) / mergeDays.length
+      : null;
+
+  const medianOpenToMergeDays =
+    mergeDays.length > 0
+      ? (() => {
+          const sorted = [...mergeDays].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          return sorted.length % 2
+            ? sorted[mid]
+            : (sorted[mid - 1] + sorted[mid]) / 2;
         })()
       : null;
 
@@ -141,20 +155,28 @@ export default async function Home({
 
       {view !== "table" && (
         <div className="border-b border-[var(--k-gray-200)] bg-white py-2">
-          <div className="mx-auto flex max-w-7xl flex-wrap items-baseline gap-x-3 gap-y-0.5 px-4 text-sm sm:px-6">
+          <div className="mx-auto flex max-w-7xl flex-wrap items-baseline gap-x-4 gap-y-0.5 px-4 text-sm sm:px-6">
             <span className="text-[var(--k-gray-500)]">Avg open → merge</span>
             {avgOpenToMergeDays != null ? (
-              <>
-                <span className="font-semibold tabular-nums text-[var(--k-green-600)]">
-                  {avgOpenToMergeDays.toFixed(1)} days
-                </span>
-                <span className="text-[var(--k-gray-400)]">
-                  · {merged.length} PR{merged.length !== 1 ? "s" : ""} merged
-                </span>
-              </>
+              <span className="font-semibold tabular-nums text-[var(--k-green-600)]">
+                {avgOpenToMergeDays.toFixed(1)} days
+              </span>
             ) : (
               <span className="text-[var(--k-gray-400)]">—</span>
             )}
+            <span className="text-[var(--k-gray-300)]">|</span>
+            <span className="text-[var(--k-gray-500)]">Median</span>
+            {medianOpenToMergeDays != null ? (
+              <span className="font-semibold tabular-nums text-[var(--k-blue-600)]">
+                {medianOpenToMergeDays.toFixed(1)} days
+              </span>
+            ) : (
+              <span className="text-[var(--k-gray-400)]">—</span>
+            )}
+            <span className="text-[var(--k-gray-300)]">|</span>
+            <span className="text-[var(--k-gray-400)]">
+              {merged.length} PR{merged.length !== 1 ? "s" : ""} merged
+            </span>
           </div>
         </div>
       )}
@@ -179,10 +201,17 @@ export default async function Home({
           </ChartCard>
 
           <ChartCard
-            title="Author Leaderboard"
+            title="Author Leaderboard (Avg)"
             description="Average merge time per author"
           >
             <AuthorLeaderboard data={merged} />
+          </ChartCard>
+
+          <ChartCard
+            title="Author Leaderboard (Median)"
+            description="Median merge time per author"
+          >
+            <MedianAuthorLeaderboard data={merged} />
           </ChartCard>
 
           <ChartCard

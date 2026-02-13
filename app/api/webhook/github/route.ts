@@ -3,7 +3,7 @@ import { verifySignature, fetchReadyAt } from "@/lib/github";
 import { supabase } from "@/lib/supabase";
 import type { Priority, ReviewStatus } from "@/lib/types";
 
-const PRIORITIES: Priority[] = ["low", "medium", "high", "critical"];
+const PRIORITIES: Priority[] = ["lowest", "low", "medium", "high", "highest"];
 const REVIEW_STATUSES: ReviewStatus[] = ["pending", "approved", "changes_requested"];
 
 function randomPriority(): Priority {
