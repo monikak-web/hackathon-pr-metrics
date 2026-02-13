@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
     priority: randomPriority(),
     due_date: randomDueDate(pr.created_at),
     qa_review: randomReviewStatus(),
-    dev_review: randomReviewStatus(),
+    dev_review: "approved" as ReviewStatus,
   };
 
   console.log("[webhook] Upserting to Supabase:", JSON.stringify(row));
