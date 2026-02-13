@@ -43,8 +43,7 @@ export default async function Home({
   const params = await searchParams;
   const { author, priority, view: viewParam } = params;
   const view = viewParam === "table" ? "table" : "dashboard";
-  // Default repo filter when not in URL; empty string in URL means "All"
-  const repo = params.repo === undefined ? "acme/platform" : (params.repo || undefined);
+  const repo = params.repo || undefined;
 
   const defaultRange = getDefaultDateRange();
   const from = params.from ?? defaultRange.from;
